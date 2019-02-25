@@ -4,7 +4,6 @@ import java.security.PublicKey;
 
 public interface Process {
     Pair<String, String> getKeys();
-    String encrypt(String msg, String key);
-    String decrypt(String msg, String key);
-
+    String encrypt(String msg, String publicKey);
+    String decrypt(String msg, String publicKey, String privateKey);
 }

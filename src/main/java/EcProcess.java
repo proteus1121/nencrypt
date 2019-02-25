@@ -1,57 +1,126 @@
+import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.tuple.Pair;
-import org.bouncycastle.asn1.sec.SECNamedCurves;
-import org.bouncycastle.asn1.sec.SECObjectIdentifiers;
-import org.bouncycastle.asn1.x9.X9ECParameters;
-import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
-import org.bouncycastle.crypto.generators.ECKeyPairGenerator;
-import org.bouncycastle.crypto.params.ECDomainParameters;
-import org.bouncycastle.crypto.params.ECKeyGenerationParameters;
-import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
-import org.bouncycastle.crypto.params.ECPublicKeyParameters;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.jce.provider.asymmetric.ec.KeyPairGenerator;
 
-import java.security.SecureRandom;
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.PublicKey;
+import java.security.Security;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 
-public class EcProcess implements Process {
-    @Override
-    public Pair<String, String> getKeys() {
-        X9ECParameters ecp = SECNamedCurves.getByOID(SECObjectIdentifiers.secp112r1);
-        ECDomainParameters domainParams = new ECDomainParameters(ecp.getCurve(),
-                ecp.getG(), ecp.getN(), ecp.getH(),
-                ecp.getSeed());
+public class EcProcess implements Process
+{
+  @Override
+  public Pair<String, String> getKeys()
+  {
+    Security.addProvider(new BouncyCastleProvider());
 
-        // Generate a private key and a public key
-        AsymmetricCipherKeyPair keyPair;
-        ECKeyGenerationParameters keyGenParams = new ECKeyGenerationParameters(domainParams, new SecureRandom());
-        ECKeyPairGenerator generator = new ECKeyPairGenerator();
-        generator.init(keyGenParams);
-        keyPair = generator.generateKeyPair();
+    java.security.KeyPairGenerator ecKeyGen;
+    try
+    {
+      ecKeyGen = KeyPairGenerator.getInstance("ECIES", BouncyCastleProvider.PROVIDER_NAME);
+      ecKeyGen.initialize(new ECGenParameterSpec("secp256r1"));
+      KeyPair ecKeyPair = ecKeyGen.generateKeyPair();
+      String aPrivate = Hex.encodeHexString(ecKeyPair.getPrivate().getEncoded());
+      String aPublic = Hex.encodeHexString(ecKeyPair.getPublic().getEncoded());
+      return Pair.of(aPrivate, aPublic);
+    }
+    catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e)
+    {
+      e.printStackTrace();
+    }
+    catch (NoSuchProviderException e)
+    {
+      e.printStackTrace();
+    }
+    return null;
+  }
 
-        ECPrivateKeyParameters privateKey = (ECPrivateKeyParameters) keyPair.getPrivate();
-        ECPublicKeyParameters publicKey = (ECPublicKeyParameters) keyPair.getPublic();
-        String privateKeyHex = Hex.encodeHexString(privateKey.getD().toByteArray());
-        String publicKeyHex = Hex.encodeHexString(publicKey.getQ().getEncoded());
-//         --- skip check
-//        // Then calculate the public key only using domainParams.getG() and private key
-//        ECPoint Q = domainParams.getG().multiply(new BigInteger(privateKeyBytes));
-//        System.out.println("Calculated public key: " + toHex(Q.getEncoded()));
-//
-//        // The calculated public key and generated public key should always match
-//        if (!toHex(publicKey.getQ().getEncoded()).equals(toHex(Q.getEncoded()))) {
-//            System.out.println("ERROR: Public keys do not match!");
-//        } else {
-//            System.out.println("Congratulations, public keys match!");
-//        }
-        return Pair.of(privateKeyHex, publicKeyHex);
+  // doesn't work, which means we are dancing on the leading edge :)
+  //        // KeyPairGenerator ecKeyGen = KeyPairGenerator.getInstance("EC");
+  //        // ecKeyGen.initialize(new ECGenParameterSpec("secp384r1"));
+  //
+  //        System.out.println("What is slow?");
+  //
+  //        Cipher iesCipher = Cipher.getInstance("ECIESwithAES");
+  //        iesCipher.init(Cipher.ENCRYPT_MODE, ecKeyPair.getPublic());
+  //
+  //        byte[] ciphertext = iesCipher.doFinal(com.google.common.base.Strings.repeat("owlstead", 1000).getBytes());
+  //
+  //        iesCipher.init(Cipher.DECRYPT_MODE, ecKeyPair.getPrivate());
+  //        byte[] plaintext = iesCipher.doFinal(ciphertext);
+  //
+  //        System.out.println(Hex.toHexString(ciphertext));
+  //        System.out.println(new String(plaintext));
+
+  @Override
+  public String encrypt(String msg, String key)
+  {
+    try{
+    // add instance of provider class
+    Security.addProvider(new BouncyCastleProvider());
+
+    String name = "secp256r1";
+
+    Cipher iesCipher = Cipher.getInstance("ECIES", BouncyCastleProvider.PROVIDER_NAME);
+    PublicKey rsa = KeyFactory.getInstance("ECIES").generatePublic(new X509EncodedKeySpec(Hex.decodeHex(key)));
+
+    iesCipher.init(Cipher.ENCRYPT_MODE, rsa);
+      return Hex.encodeHexString(iesCipher.doFinal(msg.getBytes()));
+    }
+    catch (NoSuchAlgorithmException e)
+    {
+      e.printStackTrace();
+    }
+    catch (NoSuchProviderException e)
+    {
+      e.printStackTrace();
+    }
+    catch (NoSuchPaddingException e)
+    {
+      e.printStackTrace();
+    }
+    catch (InvalidKeyException e)
+    {
+      e.printStackTrace();
+    }
+    catch (BadPaddingException e)
+    {
+      e.printStackTrace();
+    }
+    catch (IllegalBlockSizeException e)
+    {
+      e.printStackTrace();
+    }
+    catch (InvalidKeySpecException e)
+    {
+      e.printStackTrace();
+    }
+    catch (DecoderException e)
+    {
+      e.printStackTrace();
     }
 
-    @Override
-    public String encrypt(String msg, String key) {
-        return null;
-    }
+    return null;
+  }
 
-    @Override
-    public String decrypt(String msg, String key) {
-        return null;
-    }
+  @Override
+  public String decrypt(String msg, String privateKey, String publicKey)
+  {
+    return null;
+  }
 }
