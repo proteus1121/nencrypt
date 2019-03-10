@@ -1,8 +1,13 @@
+import com.codahale.shamir.Scheme;
 import org.apache.commons.lang3.tuple.Pair;
 
 import javax.swing.*;
 import javax.swing.border.Border;
 import java.awt.*;
+import java.security.SecureRandom;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class Gui extends JFrame {
     public Gui(final EncryptClass encryptClass, DecryptClass decryptClass) {
@@ -169,11 +174,38 @@ public class Gui extends JFrame {
             Process process = encryptClass.getProcess(Method.valueOf(method));
             String encoded = process.encrypt(decodedTextField.getText(), publicTextField.getText());
             encodedTextField.setText(encoded);
+
+            //                long l = ByteUtils.bytesToLong(Hex.decodeHex(privateTextField.getText()));
+            Map<Integer, byte[]> integerMap = doShamirMain(2);
+            Map<Long, byte[]> longMap = doShamirCustom(2);
+            System.out.println("x");
         });
 
         innerPanelForMsg.add(genButton);
         innerPanelForMsg.add(processButton);
         panelEncrypt.add(innerPanelForMsg);
+    }
+
+    private Map<Long, byte[]> doShamirCustom(long msg) {
+        ShamirScheme shamirScheme = new ShamirScheme(5, msg,5,3);
+        shamirScheme.doShamirScheme();
+        List<javafx.util.Pair<Long, Long>> shares = shamirScheme.getShares();
+        Map<Long, byte[]> collect = shares.stream().map(longLongPair -> Pair.of(longLongPair.getKey(), ByteUtils.longToBytes(longLongPair.getValue()))).collect(Collectors.toMap(a -> a.getKey(), a -> a.getValue()));
+//        System.out.println(collect);
+        FeldmanVSS F = new FeldmanVSS(11, 3);
+        F.setCommitments(shamirScheme.M, shamirScheme.polCoeff);
+        String result = F.verifyShare(shares.get(0).getKey(), shares.get(0).getValue());
+        System.out.println("hasil verifikasi: "+result);
+return collect;
+    }
+
+    private Map<Integer, byte[]> doShamirMain(long msg) {
+        final Scheme scheme = new Scheme(new SecureRandom(), 5, 3);
+        final byte[] secret = ByteUtils.longToBytes(msg);
+        final Map<Integer, byte[]> parts = scheme.split(secret);
+        return parts;
+//        final byte[] recovered = scheme.join(parts);
+//        System.out.println(new String(recovered, StandardCharsets.UTF_8));
     }
 
     private void setUpTestArea(JTextArea textArea){
